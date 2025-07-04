@@ -1,0 +1,25 @@
+# Core dependencies
+httpx==0.27.0
+web3==6.15.1
+eth-account==0.10.0
+aiohttp==3.9.3
+asyncio==3.4.3
+
+# Data handling
+pydantic==2.5.3
+python-dotenv==1.0.0
+
+# Worldcoin verification
+requests==2.31.0
+
+# Walrus storage integration
+boto3==1.34.34
+
+# Cryptography
+cryptography==42.0.2
+
+# Logging
+structlog==24.1.0
+
+# API framework
+aiohttp-cors==0.7.0
