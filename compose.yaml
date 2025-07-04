@@ -1,40 +1,28 @@
 services:
-  # Local LLM for family recommendations
   ollama:
-    image: "docker.io/ollama/ollama:latest@sha256:e0c000f89ec8538c612d1ef1e644cd08e14c30c4bfaaaba95709b0df6fb0b9f8"
+    image: "docker.io/ollama/ollama"
     platform: linux/amd64
     ports:
       - "11434:11434"
     volumes:
       - /storage/ollama:/root/.ollama
-      - /run/rofl-appd.sock:/run/rofl-appd.sock
-    environment:
-      - OLLAMA_MODELS=/root/.ollama/models
-    entrypoint: ["/usr/bin/bash", "-c", "/bin/ollama serve & sleep 10 && /bin/ollama pull llama3.2:latest && wait"]
+    entrypoint: ["/usr/bin/bash", "-c", "/bin/ollama serve & sleep 5; ollama pull deepseek-r1:1.5b; wait"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "/bin/ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Family connection service
-  family-connector:
-    build: ./services/family-connector
+  llm-api:
+    build: ./services/llm-api
     platform: linux/amd64
-    depends_on:
-      - ollama
-    volumes:
-      - /run/rofl-appd.sock:/run/rofl-appd.sock
-    environment:
-      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
-      - OLLAMA_HOST=http://ollama:11434
-      - WORLDCOIN_VERIFY_URL=${WORLDCOIN_VERIFY_URL}
-      - WALRUS_API_KEY=${WALRUS_API_KEY}
     ports:
       - "8080:8080"
+    volumes:
+      - /run/rofl-appd.sock:/run/rofl-appd.sock
+    depends_on:
+      ollama:
+        condition: service_healthy
     restart: on-failure
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    environment:
+      - OLLAMA_URL=http://ollama:11434

@@ -1,149 +1,74 @@
-# WorldTree - Family Connection Platform
+# DeepSeek LLM in TEE (ROFL)
 
-A privacy-preserving family connection platform built on Oasis ROFL (Runtime Off-chain Logic) that helps people discover and verify family relationships through secure computation and local AI processing.
+A simple ROFL app that runs DeepSeek-R1:1.5b model inside a Trusted Execution Environment (TEE) with REST API access.
 
 ## Features
 
-- **Privacy-First Design**: All sensitive data processing happens inside a Trusted Execution Environment (TEE)
-- **Local LLM Analysis**: Uses Ollama to run AI models locally for analyzing family connections
-- **Worldcoin Identity Verification**: Ensures unique human users through privacy-preserving identity proofs
-- **Smart Contract Bounties**: Create and claim bounties for verified family connections
-- **Zero-Knowledge Proofs**: Verify relationships without exposing private genetic or personal data
-- **Encrypted Storage**: Family data stored encrypted on Walrus decentralized storage
+- **DeepSeek-R1:1.5b** running locally in TEE
+- **REST API** for text generation and chat
+- **Persistent storage** for model files
+- **Secure execution** in Oasis ROFL environment
 
-## Architecture
+## API Endpoints
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   ROFL TEE                          │
-│  ┌─────────────┐        ┌─────────────────────┐    │
-│  │   Ollama    │        │  Family Connector   │    │
-│  │  (Local LLM)│◄──────►│     Service         │    │
-│  └─────────────┘        └──────────┬──────────┘    │
-│                                    │                │
-│                         ┌──────────▼──────────┐    │
-│                         │    ROFL App Daemon   │    │
-│                         └──────────┬──────────┘    │
-└────────────────────────────────────┼───────────────┘
-                                     │
-                          ┌──────────▼──────────┐
-                          │  Sapphire Blockchain │
-                          │  (FamilyBounty.sol)  │
-                          └─────────────────────┘
-```
-
-## Prerequisites
-
-- Oasis CLI installed
-- Docker and Docker Compose
-- Node.js and npm (for smart contract deployment)
-- Funded Oasis Sapphire Testnet account (100+ TEST tokens)
+- `GET /health` - Health check
+- `POST /generate` - Generate text from prompt
+- `POST /chat` - Chat with message history  
+- `GET /model` - Get model information
 
 ## Quick Start
 
-1. Clone the repository:
+1. **Create ROFL app:**
    ```bash
-   git clone <repository-url>
-   cd worldtree/rofl
+   oasis rofl create --network testnet --account <your-account>
    ```
 
-2. Copy environment variables:
+2. **Build ROFL bundle:**
    ```bash
-   cp .env.example .env
-   # Edit .env with your values
+   docker run --platform linux/amd64 --rm -v .:/src -it ghcr.io/oasisprotocol/rofl-dev:main oasis rofl build
    ```
 
-3. Install contract dependencies:
-   ```bash
-   cd contracts
-   npm install
-   cd ..
-   ```
-
-4. Create ROFL app on-chain:
-   ```bash
-   oasis rofl create --network testnet
-   ```
-
-5. Deploy the smart contract:
-   ```bash
-   cd contracts
-   ROFL_APP_ID=<your-rofl-app-id> npx hardhat run scripts/deploy.js --network sapphire-testnet
-   cd ..
-   ```
-
-6. Update CONTRACT_ADDRESS in your .env file with the deployed address
-
-7. Build the ROFL bundle:
-   ```bash
-   oasis rofl build
-   ```
-
-8. Set secrets:
-   ```bash
-   echo -n "your-worldcoin-url" | oasis rofl secret set WORLDCOIN_VERIFY_URL -
-   echo -n "your-walrus-key" | oasis rofl secret set WALRUS_API_KEY -
-   echo -n "your-contract-address" | oasis rofl secret set CONTRACT_ADDRESS -
-   ```
-
-9. Update and deploy:
+3. **Deploy:**
    ```bash
    oasis rofl update
    oasis rofl deploy
    ```
 
-## Local Development
-
-To test locally with Docker Compose:
+## Local Testing
 
 ```bash
-export CONTRACT_ADDRESS=0x1234...
-export WORLDCOIN_VERIFY_URL=https://...
-export WALRUS_API_KEY=...
+# Test with Docker Compose (requires Docker)
+podman-compose up --build
 
-docker compose up --build
+# Test API
+python3 test_llm.py
 ```
 
-## API Endpoints
+## Example Usage
 
-The Family Connector service exposes the following REST API:
+### Generate Text
+```bash
+curl -X POST http://localhost:8080/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is the meaning of life?"}'
+```
 
-- `GET /api/v1/health` - Health check
-- `POST /api/v1/verify-identity` - Verify Worldcoin identity
-- `POST /api/v1/analyze-connection` - Analyze potential family connection
-- `POST /api/v1/submit-proof` - Submit verification proof
-- `POST /api/v1/store-profile` - Store encrypted user profile
-- `GET /api/v1/recommendations/{user_id}` - Get family recommendations
+### Chat
+```bash
+curl -X POST http://localhost:8080/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
+```
 
-## Smart Contract Interface
+## Architecture
 
-The `FamilyBounty` contract provides:
+- **TEE Type**: TDX containers
+- **Model**: DeepSeek-R1:1.5b (1.1GB)
+- **Storage**: Persistent at `/storage/ollama`
+- **API**: REST on port 8080
 
-- `createBounty(address relative, bytes metadata)` - Create a connection bounty
-- `submitClaim(bytes32 connectionId, string evidence)` - Submit a claim
-- `claimBounty(bytes32 connectionId)` - Claim verified bounty
-- `getUserConnections(address user)` - Get user's connections
+## Security
 
-## Security Considerations
-
-- All sensitive data processing happens inside the TEE
-- Private keys are managed by ROFL's secure key management system
-- User data is encrypted before storage
-- Smart contract calls are authenticated through ROFL's subcall mechanism
-- Local LLM ensures prompts with private data never leave the TEE
-
-## Future Enhancements
-
-- [ ] Integration with genetic testing services (with user consent)
-- [ ] Multi-language support for global family connections
-- [ ] Advanced matching algorithms using graph databases
-- [ ] Integration with historical immigration databases
-- [ ] Mobile app with secure enclave support
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
-
-## License
-
-[License details here]
+- Runs inside Intel TDX Trusted Execution Environment
+- Model weights stored in encrypted persistent storage
+- API access authenticated via ROFL framework
