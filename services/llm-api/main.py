@@ -170,6 +170,26 @@ def create_app():
     
     return app
 
+async def poll_bridge_contract():
+    """Poll the LLMBridge contract for requests."""
+    contract_address = os.getenv("LLM_BRIDGE_CONTRACT")
+    if not contract_address:
+        logger.warning("LLM_BRIDGE_CONTRACT not set, skipping bridge integration")
+        return
+    
+    logger.info(f"Starting bridge integration with contract: {contract_address}")
+    
+    # Simple polling loop - in production, use proper Web3 integration
+    while True:
+        try:
+            # For now, just log that we would poll
+            logger.info("Would poll contract for unfulfilled requests...")
+            # TODO: Implement actual contract polling via rofl-appd socket
+            await asyncio.sleep(30)
+        except Exception as e:
+            logger.error(f"Bridge polling error: {e}")
+            await asyncio.sleep(60)
+
 async def main():
     """Main entry point."""
     logger.info("Starting LLM API service...")
@@ -191,6 +211,9 @@ async def main():
     logger.info(f"  POST /generate  - Generate text from prompt")
     logger.info(f"  POST /chat      - Chat with message history")
     logger.info(f"  GET  /model     - Get model information")
+    
+    # Start bridge polling task if configured
+    asyncio.create_task(poll_bridge_contract())
     
     # Keep running
     await asyncio.Event().wait()

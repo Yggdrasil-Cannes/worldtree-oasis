@@ -26,3 +26,4 @@ services:
     restart: on-failure
     environment:
       - OLLAMA_URL=http://ollama:11434
+      - LLM_BRIDGE_CONTRACT=0x32f22B267Be8CD47FAF93Bcd1CC31059bdc24FD2
