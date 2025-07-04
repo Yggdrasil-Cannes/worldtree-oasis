@@ -17,12 +17,19 @@ class ROFLClient:
     """Client for interacting with ROFL app daemon"""
     
     def __init__(self, socket_path="/run/rofl-appd.sock"):
-        self.client = httpx.Client(
-            transport=httpx.HTTPTransport(uds=socket_path),
-            timeout=30.0
-        )
+        self.socket_path = socket_path
         self.app_id = None
-        self._init_app_id()
+        self.mock_mode = not os.path.exists(socket_path)
+        
+        if self.mock_mode:
+            logger.warning("ROFL daemon not found, running in mock mode")
+            self.app_id = "mock-rofl-app-id-development"
+        else:
+            self.client = httpx.Client(
+                transport=httpx.HTTPTransport(uds=socket_path),
+                timeout=30.0
+            )
+            self._init_app_id()
     
     def _init_app_id(self):
         """Initialize app ID from ROFL daemon"""
@@ -36,6 +43,11 @@ class ROFLClient:
     
     def generate_key(self, key_id: str, kind: str = "secp256k1") -> str:
         """Generate a key using ROFL's key management"""
+        if self.mock_mode:
+            # Return a mock key for development
+            import secrets
+            return secrets.token_hex(32)
+        
         response = self.client.post(
             "http://localhost/rofl/v1/keys/generate",
             json={"key_id": key_id, "kind": kind}
@@ -44,6 +56,11 @@ class ROFLClient:
     
     def sign_and_submit_tx(self, tx_data: dict) -> dict:
         """Sign and submit transaction through ROFL"""
+        if self.mock_mode:
+            # Return mock transaction result
+            logger.info("mock_tx_submission", tx_data=tx_data)
+            return {"data": "0xmocked", "hash": "0x" + "0" * 64}
+        
         response = self.client.post(
             "http://localhost/rofl/v1/tx/sign-submit",
             json={"tx": tx_data}
@@ -228,7 +245,10 @@ class FamilyConnectorService:
             # Generate encryption key from ROFL KMS
             key_hex = self.rofl.generate_key(f"user_data_{user_id}", "raw-256")
             key = bytes.fromhex(key_hex)[:32]  # Use first 32 bytes for Fernet
-            fernet_key = Fernet(key)
+            
+            # Fernet requires base64 encoded 32-byte key
+            import base64
+            fernet_key = Fernet(base64.urlsafe_b64encode(key))
             
             # Encrypt data
             encrypted = fernet_key.encrypt(json.dumps(data).encode())
