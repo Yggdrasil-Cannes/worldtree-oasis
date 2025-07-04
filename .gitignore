@@ -1,0 +1,94 @@
+# IDE specific files
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+my_env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ROFL specific
+*.orc
+rofl.yaml
+!rofl.yaml.example
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Private keys and secrets
+*.pem
+*.key
+*.cert
+private/
+secrets/
+
+# Build artifacts
+build/
+dist/
+target/
+
+# Walrus storage
+.walrus/
+
+# Test coverage
+coverage/
+.coverage
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Contract artifacts
+artifacts/
+cache/
+typechain/
+typechain-types/
