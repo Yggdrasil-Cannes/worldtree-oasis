@@ -2,7 +2,7 @@
 """ABI encoding utilities for ROFL authenticated transactions."""
 
 import json
-from eth_abi import encode_abi
+from eth_abi import encode, decode
 from eth_utils import function_signature_to_4byte_selector
 import logging
 
@@ -44,7 +44,7 @@ def encode_function_call(function_name, args):
     
     # Encode arguments
     if args:
-        encoded_args = encode_abi(func_def["inputs"], args).hex()
+        encoded_args = encode(func_def["inputs"], args).hex()
         return "0x" + selector + encoded_args
     else:
         return "0x" + selector
@@ -61,8 +61,7 @@ def decode_function_result(function_name, data):
         data = data[2:]
     
     # Decode based on output types
-    from eth_abi import decode_abi
-    decoded = decode_abi(func_def["outputs"], bytes.fromhex(data))
+    decoded = decode(func_def["outputs"], bytes.fromhex(data))
     
     return decoded
 

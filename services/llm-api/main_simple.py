@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ROFL Genetic Analysis Service for WorldtreeTest Contract"""
+"""ROFL Genetic Analysis Service for WorldtreeTest Contract - Simplified Version"""
 
 import os
 import logging
@@ -9,7 +9,6 @@ import json
 from typing import Dict, Any, Optional, Tuple
 from aiohttp import web
 from snp_analyzer import SNPAnalyzer
-from abi_encoder import encode_function_call, decode_function_result
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +23,12 @@ WORLDTREE_CONTRACT = os.getenv("WORLDTREE_CONTRACT", "0xDF4A26832c770EeC30442337
 ROFL_SOCKET = "/run/rofl-appd.sock"
 POLL_INTERVAL = 30  # seconds
 MAX_REQUEST_ID = 1000  # Maximum request ID to check
+
+# Manually encode function signatures (avoiding eth_abi import issues)
+FUNCTION_SIGNATURES = {
+    "submitAnalysisResult": "0x12345678",  # Placeholder - we'll need the actual signature
+    "markAnalysisFailed": "0x87654321"     # Placeholder - we'll need the actual signature
+}
 
 class GeneticAnalysisService:
     """Service for processing genetic analysis requests from WorldtreeTest contract"""
@@ -40,75 +45,34 @@ class GeneticAnalysisService:
         """Submit an authenticated transaction to the contract"""
         try:
             async with httpx.AsyncClient(transport=httpx.HTTPTransport(uds=ROFL_SOCKET)) as client:
-                # Encode the function call
-                encoded_data = encode_function_call(function_name, args)
+                # For now, we'll use a simplified approach
+                # In production, you'd properly encode the function call
+                logger.info(f"Would submit {function_name} with args: {args}")
                 
-                tx_data = {
-                    "tx": {
-                        "kind": "eth",
-                        "data": {
-                            "gas_limit": 800000,
-                            "to": self.contract,
-                            "value": 0,
-                            "data": encoded_data
-                        }
-                    }
-                }
-                
-                response = await client.post(
-                    "http://localhost/rofl/v1/tx/sign-submit",
-                    json=tx_data
-                )
-                
-                if response.status_code == 200:
-                    logger.info(f"Transaction {function_name} submitted successfully")
-                    return response.json()
-                else:
-                    logger.error(f"Failed to submit {function_name}: {response.text}")
-                    return None
+                # Just log for now since we can't properly encode without eth_abi
+                return {"status": "logged"}
                     
         except Exception as e:
             logger.error(f"Error submitting {function_name}: {e}")
             return None
     
-    async def try_get_snp_data(self, request_id: int) -> Tuple[Optional[str], Optional[str]]:
-        """Try to get SNP data for a request - will fail if not authorized or request doesn't exist"""
-        try:
-            # This will only work if called by ROFL app and request exists
-            result = await self.submit_transaction("getSNPDataForAnalysis", [request_id])
-            if result and "data" in result:
-                # Parse the result to extract SNP data
-                # This is a simplified version - actual decoding would be needed
-                return ("sample_snp_data_1", "sample_snp_data_2")  # Placeholder
-            return None, None
-        except Exception as e:
-            logger.debug(f"Could not get SNP data for request {request_id}: {e}")
-            return None, None
-    
-    async def process_analysis_request(self, request_id: int) -> Optional[Dict[str, Any]]:
-        """Process a single analysis request"""
-        logger.info(f"Attempting to process analysis request {request_id}")
+    async def process_test_request(self, request_id: int, user1_snp_data: str, user2_snp_data: str) -> Optional[Dict[str, Any]]:
+        """Process a test analysis request with provided SNP data"""
+        logger.info(f"Processing test analysis request {request_id}")
         
         try:
-            # Try to get SNP data - this will fail if request doesn't exist or isn't pending
-            user1_snp_raw, user2_snp_raw = await self.try_get_snp_data(request_id)
-            
-            if not user1_snp_raw or not user2_snp_raw:
-                # No pending request with this ID
-                return None
-            
             # Parse SNP data
-            user1_snp_lines = user1_snp_raw.strip().split('\n')
-            user2_snp_lines = user2_snp_raw.strip().split('\n')
+            user1_snp_lines = user1_snp_data.strip().split('\n')
+            user2_snp_lines = user2_snp_data.strip().split('\n')
             
             user1_snps = self.snp_analyzer.parse_snp_data(user1_snp_lines)
             user2_snps = self.snp_analyzer.parse_snp_data(user2_snp_lines)
             
+            logger.info(f"User 1 SNPs: {len(user1_snps)}")
+            logger.info(f"User 2 SNPs: {len(user2_snps)}")
+            
             if len(user1_snps) < 100 or len(user2_snps) < 100:
-                await self.submit_transaction("markAnalysisFailed", [
-                    request_id,
-                    "Insufficient SNP data (minimum 100 SNPs required per user)"
-                ])
+                logger.warning("Insufficient SNP data")
                 return None
             
             # Run genetic analysis
@@ -117,55 +81,86 @@ class GeneticAnalysisService:
             # Store result for API access
             self.processing_results[request_id] = analysis_result
             
-            # Submit results to contract
-            confidence = int(analysis_result["confidence"] * 100)  # Convert to percentage
+            # Log results (in production, this would submit to contract)
+            confidence = int(analysis_result["confidence"] * 100)
             relationship = analysis_result["relationship"]
-            result_json = json.dumps(analysis_result)
             
+            logger.info(f"Analysis complete for request {request_id}:")
+            logger.info(f"  Relationship: {relationship}")
+            logger.info(f"  Confidence: {confidence}%")
+            logger.info(f"  Common SNPs: {analysis_result['n_common_snps']}")
+            logger.info(f"  IBS2 percentage: {analysis_result['ibs2_percentage']:.2f}%")
+            logger.info(f"  PCA distance: {analysis_result.get('pca_distance', 'N/A')}")
+            
+            # Would submit to contract here
             await self.submit_transaction("submitAnalysisResult", [
                 request_id,
-                result_json,
+                json.dumps(analysis_result),
                 confidence,
                 relationship
             ])
             
-            logger.info(f"Analysis complete for request {request_id}: {relationship} ({confidence}%)")
             return analysis_result
             
         except Exception as e:
             logger.error(f"Error processing request {request_id}: {e}")
-            await self.submit_transaction("markAnalysisFailed", [
-                request_id,
-                f"Analysis error: {str(e)}"
-            ])
             return None
     
     async def polling_loop(self):
         """Poll for and process pending analysis requests"""
         logger.info("Starting genetic analysis polling loop...")
         
+        # For testing, let's process a sample request
+        sample_user1_snp = """# Sample SNP data for User 1
+rs4477212	72017	1	AA
+rs3094315	742584	1	GG
+rs3131972	742825	1	AG
+rs12562034	758311	1	GG
+rs12124819	766409	1	AG
+rs11240777	788822	1	AG
+rs6681049	789870	1	CC
+rs4970383	828418	1	CC
+rs4475691	836671	1	CC
+rs7537756	844113	1	AA
+rs13302982	845381	1	GG
+rs1110052	863421	1	GG
+rs2272756	882033	1	GG
+rs3748597	888639	1	CC
+rs13303106	891945	1	AA
+rs4970421	903104	1	CC
+rs12726255	907247	1	GG
+rs11260542	910935	1	GG
+rs6672353	949608	1	CC
+rs7519837	957898	1	CC"""
+
+        sample_user2_snp = """# Sample SNP data for User 2
+rs4477212	72017	1	AG
+rs3094315	742584	1	GG
+rs3131972	742825	1	GG
+rs12562034	758311	1	GG
+rs12124819	766409	1	AA
+rs11240777	788822	1	GG
+rs6681049	789870	1	CT
+rs4970383	828418	1	CC
+rs4475691	836671	1	CT
+rs7537756	844113	1	AG
+rs13302982	845381	1	AG
+rs1110052	863421	1	GG
+rs2272756	882033	1	AG
+rs3748597	888639	1	CT
+rs13303106	891945	1	AG
+rs4970421	903104	1	CC
+rs12726255	907247	1	AG
+rs11260542	910935	1	GG
+rs6672353	949608	1	CC
+rs7519837	957898	1	CT"""
+
+        # Process one test request on startup
+        await self.process_test_request(1, sample_user1_snp, sample_user2_snp)
+        
         while True:
             try:
-                # Since we can't call view functions, we'll try processing requests sequentially
-                # Start from the last processed ID + 1
-                start_id = self.last_processed_id + 1
-                processed_any = False
-                
-                for request_id in range(start_id, min(start_id + 10, MAX_REQUEST_ID)):
-                    result = await self.process_analysis_request(request_id)
-                    if result:
-                        self.last_processed_id = request_id
-                        processed_any = True
-                    else:
-                        # If we get None, it might mean no more pending requests
-                        # But we'll continue checking a few more IDs to be sure
-                        pass
-                
-                if processed_any:
-                    logger.info(f"Processed requests up to ID {self.last_processed_id}")
-                else:
-                    logger.debug("No new pending requests found")
-                
+                logger.info("Polling cycle complete. Waiting...")
             except Exception as e:
                 logger.error(f"Polling error: {e}")
             
@@ -183,7 +178,7 @@ async def health_check(request):
     """Health check endpoint"""
     return web.json_response({
         "status": "healthy",
-        "service": "genetic-analysis",
+        "service": "genetic-analysis-simplified",
         "contract": WORLDTREE_CONTRACT,
         "last_processed_id": service.last_processed_id,
         "results_cached": len(service.processing_results)
@@ -220,18 +215,21 @@ async def analyze(request):
         data = await request.json()
         user1_snp = data.get("user1_snp", "")
         user2_snp = data.get("user2_snp", "")
+        request_id = data.get("request_id", 999)
         
-        # Parse SNP data
-        user1_snps = service.snp_analyzer.parse_snp_data(user1_snp.strip().split('\n'))
-        user2_snps = service.snp_analyzer.parse_snp_data(user2_snp.strip().split('\n'))
+        result = await service.process_test_request(request_id, user1_snp, user2_snp)
         
-        # Run analysis
-        result = service.snp_analyzer.run_pca_analysis(user1_snps, user2_snps)
-        
-        return web.json_response({
-            "status": "success",
-            "result": result
-        })
+        if result:
+            return web.json_response({
+                "status": "success",
+                "request_id": request_id,
+                "result": result
+            })
+        else:
+            return web.json_response({
+                "status": "error",
+                "message": "Analysis failed"
+            }, status=500)
         
     except Exception as e:
         logger.error(f"Analysis error: {e}")
@@ -254,7 +252,7 @@ def create_app():
 async def main():
     """Main entry point"""
     logger.info("=" * 60)
-    logger.info("Starting ROFL Genetic Analysis Service")
+    logger.info("Starting ROFL Genetic Analysis Service (Simplified)")
     logger.info(f"Contract: {WORLDTREE_CONTRACT}")
     logger.info(f"ROFL Socket: {ROFL_SOCKET}")
     logger.info(f"Poll Interval: {POLL_INTERVAL} seconds")
@@ -276,6 +274,8 @@ async def main():
     logger.info("  GET  /health          - Health check")
     logger.info("  GET  /result/{id}     - Get analysis result by request ID")
     logger.info("  POST /analyze         - Manual analysis (for testing)")
+    logger.info("")
+    logger.info("Processing test genetic analysis on startup...")
     
     # Keep running
     await asyncio.Event().wait()

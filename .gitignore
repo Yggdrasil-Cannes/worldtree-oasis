@@ -97,3 +97,12 @@ typechain-types/
 
 #
 .git-backup-20250705-025554/
+
+*.md
+
+# Redundant/experimental files
+bloat/bloat/
+bloat/
+
+# YoYo AI version control directory
+.yoyo/

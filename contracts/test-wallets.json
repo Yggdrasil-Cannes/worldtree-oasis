@@ -1,0 +1,12 @@
+{
+  "wallet1": {
+    "address": "0x68aAB1F5175e7Fb1439c2F196b78aD57AF378740",
+    "privateKey": "0x6843ea9085655171aa9ba11e5f8e9ff968354e5ca2ad5b8de1629646746a5541",
+    "mnemonic": "pipe grape churn wire flag harbor design hover rescue side coral achieve"
+  },
+  "wallet2": {
+    "address": "0xbFbB95c74FaB7F9066711966CB50209176C37fFe",
+    "privateKey": "0x8b4d57f2dc9d64dc89f4e3c302e155ea1d74444da010e2b5c95f45422709ec9f",
+    "mnemonic": "kite oblige engine used tuition warfare salon guitar valley focus spot plate"
+  }
+}

@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only essential dependencies
+RUN pip install --no-cache-dir \
+    aiohttp==3.9.3 \
+    httpx==0.27.0 \
+    numpy==1.26.4 \
+    scikit-learn==1.4.2 \
+    pycryptodome==3.20.0
+
+# Copy application files
+COPY snp_analyzer.py main_fixed.py compute_selectors.py abi_simple.py /app/
+
+# Use the fixed main file
+RUN mv main_fixed.py main.py
+
+EXPOSE 8080
+
+CMD ["python", "main.py"]

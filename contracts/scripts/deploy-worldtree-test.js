@@ -1,8 +1,9 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  // ROFL app ID (same as in LLMBridge)
-  const ROFL_APP_ID = "0x00ad68194ee7e74b2c188bb62dc05e7dd99c52d300";
+  // Current ROFL app ID: rofl1qq9vdpxduln5utg3htkhvzwhvhdnzttylunuy6wm
+  // Converted to Ethereum address format
+  const ROFL_APP_ID = "0x000ac684cde7e74e2d11baed7609d765db312d64ff";
   
   console.log("Deploying WorldtreeTest contract...");
   console.log("Network:", hre.network.name);

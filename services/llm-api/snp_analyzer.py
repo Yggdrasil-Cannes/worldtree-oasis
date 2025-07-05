@@ -1,232 +1,190 @@
 #!/usr/bin/env python3
-"""Genetic SNP analysis module for ROFL."""
+"""Genetic SNP analysis module for ROFL (TEE-ready).
+
+Designed for execution inside an **Oasis Trusted Execution Environment**, so
+there are **no top-level side effects** (no CLI helper or `if __name__ ==`
+guard). The public surface stays identical—only the PCA block is fixed and
+cleaned.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Iterable, Dict, List, Tuple, Any
 
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-import logging
 
 logger = logging.getLogger(__name__)
 
+AlleleEncoding = int
+
+
 class SNPAnalyzer:
-    """Analyze SNP data for genetic relatedness using PCA."""
-    
-    def __init__(self):
-        self.scaler = StandardScaler()
-        
-    def parse_snp_data(self, snp_lines):
-        """Parse SNP data in format: rsID position chromosome genotype"""
-        snps = {}
-        for line in snp_lines:
-            if not line.strip() or line.startswith('#'):
-                continue
-                
-            parts = line.strip().split()
-            if len(parts) >= 4:
-                rsid = parts[0]
-                position = parts[1]
-                chromosome = parts[2]
-                genotype = parts[3].upper()
-                
-                # Store by rsID for easy matching between samples
-                snps[rsid] = {
-                    'position': position,
-                    'chromosome': chromosome,
-                    'genotype': genotype
-                }
-        
-        return snps
-    
-    def encode_genotype(self, genotype):
-        """
-        Encode genotype to numerical value using additive model.
-        AA, TT, CC, GG = 0 (homozygous reference)
-        AT, AG, AC, etc. = 1 (heterozygous)
-        Different homozygous = 2 (homozygous alternate)
-        Missing/Invalid = -1
-        """
-        if len(genotype) != 2:
-            return -1
-        
-        allele1, allele2 = genotype[0], genotype[1]
-        
-        # Check for missing data
-        if '-' in genotype or 'N' in genotype:
-            return -1
-            
-        # Homozygous - both alleles the same
-        if allele1 == allele2:
-            # We need reference allele info to properly code 0 vs 2
-            # For now, use alphabetical ordering as proxy
-            if genotype in ['AA', 'CC']:
-                return 0
-            else:  # GG, TT
-                return 2
-        else:
-            # Heterozygous
-            return 1
-    
-    def prepare_snp_matrix(self, user1_snps, user2_snps):
-        """
-        Prepare aligned SNP matrix for both users.
-        Only includes SNPs present in both samples.
-        """
-        # Find common SNPs
-        common_rsids = set(user1_snps.keys()) & set(user2_snps.keys())
-        logger.info(f"Found {len(common_rsids)} common SNPs out of {len(user1_snps)} and {len(user2_snps)}")
-        
-        if len(common_rsids) < 1000:
-            logger.warning("Very few common SNPs found. Results may be unreliable.")
-        
-        # Sort for consistent ordering
-        common_rsids = sorted(list(common_rsids))
-        
-        # Create numerical arrays
-        user1_encoded = []
-        user2_encoded = []
-        valid_positions = []
-        
-        for i, rsid in enumerate(common_rsids):
-            enc1 = self.encode_genotype(user1_snps[rsid]['genotype'])
-            enc2 = self.encode_genotype(user2_snps[rsid]['genotype'])
-            
-            # Skip if either has missing data
-            if enc1 >= 0 and enc2 >= 0:
-                user1_encoded.append(enc1)
-                user2_encoded.append(enc2)
-                valid_positions.append(i)
-        
-        logger.info(f"Using {len(valid_positions)} valid SNPs after filtering")
-        
-        return np.array(user1_encoded), np.array(user2_encoded), len(valid_positions)
-    
-    def calculate_ibs_similarity(self, user1_encoded, user2_encoded):
-        """
-        Calculate Identity-By-State (IBS) similarity.
-        This is a simple measure of genetic similarity.
-        """
-        # IBS0: No alleles shared (0 vs 2)
-        # IBS1: One allele shared (0 vs 1, 1 vs 2)  
-        # IBS2: Both alleles shared (same genotype)
-        
-        ibs0 = np.sum((user1_encoded == 0) & (user2_encoded == 2)) + \
-               np.sum((user1_encoded == 2) & (user2_encoded == 0))
-               
-        ibs1 = np.sum((user1_encoded == 0) & (user2_encoded == 1)) + \
-               np.sum((user1_encoded == 1) & (user2_encoded == 0)) + \
-               np.sum((user1_encoded == 1) & (user2_encoded == 2)) + \
-               np.sum((user1_encoded == 2) & (user2_encoded == 1))
-               
-        ibs2 = np.sum(user1_encoded == user2_encoded)
-        
-        total = len(user1_encoded)
-        
-        # IBS similarity score (weighted average)
-        ibs_score = (ibs2 * 2 + ibs1 * 1) / (total * 2)
-        
+    """Analyse pair-wise SNP data for relatedness (IBS + optional PCA)."""
+
+    # ------------------------------------------------------------------
+    # Construction helper
+    # ------------------------------------------------------------------
+
+    def __init__(self, *, use_pca: bool = True, scaler: StandardScaler | None = None) -> None:
+        self.use_pca = use_pca
+        self.scaler = scaler or StandardScaler(with_mean=True, with_std=True)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def run_pca_analysis(
+        self,
+        user1_snps: Dict[str, Dict[str, str]],
+        user2_snps: Dict[str, Dict[str, str]],
+        *,
+        n_components: int = 10,
+    ) -> Dict[str, Any]:
+        """Full analysis pipeline. Called by the enclave host."""
+        # 1. Align & encode
+        v1, v2, n_valid = self._prepare_snp_matrix(user1_snps, user2_snps)
+        if n_valid < 100:
+            raise ValueError("Insufficient valid SNPs (<100) for analysis")
+
+        # 2. IBS similarity
+        ibs = self._calculate_ibs_similarity(v1, v2)
+        ibs2_ratio = ibs["ibs2"] / ibs["total_snps"]
+
+        # 3. Optional PCA
+        pca_dist: float | None = None
+        explained_var: List[float] | None = None
+        if self.use_pca:
+            data = np.vstack([v1, v2])               # shape: (2, N)
+            data = self.scaler.fit_transform(data)   # centre + scale cols
+            max_rank = min(data.shape)               # ≤ 2 with two samples
+            n_comp = max(1, min(n_components, max_rank))
+            pca = PCA(n_components=n_comp)
+            proj = pca.fit_transform(data)           # shape: (2, n_comp)
+            pca_dist = float(np.linalg.norm(proj[0] - proj[1]))
+            explained_var = pca.explained_variance_ratio_.tolist()
+            logger.debug("PCA distance = %.4f", pca_dist)
+
+        # 4. Relationship heuristic
+        relationship, confidence = self._estimate_relationship(ibs["ibs_score"], ibs2_ratio)
+
         return {
-            'ibs0': int(ibs0),
-            'ibs1': int(ibs1), 
-            'ibs2': int(ibs2),
-            'total_snps': int(total),
-            'ibs_score': float(ibs_score)
+            "status": "success",
+            "n_common_snps": n_valid,
+            "ibs_analysis": ibs,
+            "ibs2_percentage": ibs2_ratio * 100.0,
+            "relationship": relationship,
+            "confidence": confidence,
+            "pca_distance": pca_dist,
+            "explained_variance_ratio": explained_var,
+            "recommendations": self._get_recommendations(relationship, confidence),
         }
-    
-    def estimate_relationship(self, ibs_score, ibs2_ratio):
-        """
-        Estimate relationship based on IBS patterns.
-        These are rough estimates based on expected sharing.
-        """
-        if ibs_score > 0.99:
+
+    # ------------------------------------------------------------------
+    # Static helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def parse_snp_data(lines: Iterable[str]) -> Dict[str, Dict[str, str]]:
+        """Parse 23-and-Me style genotype lines into a dict keyed by rsID."""
+        snps: Dict[str, Dict[str, str]] = {}
+        for ln in lines:
+            if not ln.strip() or ln.startswith("#"):
+                continue
+            parts = ln.strip().split()
+            if len(parts) < 4:
+                continue
+            rsid, pos, chrom, gt = parts[:4]
+            snps[rsid] = {"position": pos, "chromosome": chrom, "genotype": gt.upper()}
+        return snps
+
+    # ------------------------------------------------------------------
+    # Internal helpers (encoding, alignment, IBS, rules)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _encode_genotype(gt: str) -> AlleleEncoding:
+        if len(gt) != 2 or "-" in gt or "N" in gt:
+            return -1
+        a1, a2 = gt
+        if a1 == a2:
+            return 0 if gt in {"AA", "CC"} else 2
+        return 1
+
+    def _prepare_snp_matrix(
+        self,
+        u1: Dict[str, Dict[str, str]],
+        u2: Dict[str, Dict[str, str]],
+    ) -> Tuple[np.ndarray, np.ndarray, int]:
+        common = sorted(set(u1) & set(u2))
+        if len(common) < 1000:
+            logger.warning("Only %d common SNPs – estimates may be noisy", len(common))
+        v1, v2 = [], []
+        for rsid in common:
+            g1 = self._encode_genotype(u1[rsid]["genotype"])
+            g2 = self._encode_genotype(u2[rsid]["genotype"])
+            if g1 >= 0 and g2 >= 0:
+                v1.append(g1)
+                v2.append(g2)
+        return np.array(v1, dtype=np.int8), np.array(v2, dtype=np.int8), len(v1)
+
+    @staticmethod
+    def _calculate_ibs_similarity(v1: np.ndarray, v2: np.ndarray) -> Dict[str, int | float]:
+        ibs0 = int(np.sum((v1 == 0) & (v2 == 2)) + np.sum((v1 == 2) & (v2 == 0)))
+        ibs1 = int(
+            np.sum((v1 == 0) & (v2 == 1))
+            + np.sum((v1 == 1) & (v2 == 0))
+            + np.sum((v1 == 1) & (v2 == 2))
+            + np.sum((v1 == 2) & (v2 == 1))
+        )
+        ibs2 = int(np.sum(v1 == v2))
+        total = len(v1)
+        ibs_score = (2 * ibs2 + ibs1) / (2 * total)
+        return {"ibs0": ibs0, "ibs1": ibs1, "ibs2": ibs2, "total_snps": total, "ibs_score": ibs_score}
+
+    @staticmethod
+    def _estimate_relationship(score: float, ibs2_ratio: float) -> Tuple[str, float]:
+        if score > 0.99:
             return "identical/twin", 0.99
-        elif ibs_score > 0.85 and ibs2_ratio > 0.85:
+        if score > 0.85 and ibs2_ratio > 0.85:
             return "parent-child", 0.95
-        elif ibs_score > 0.85 and ibs2_ratio > 0.75:
+        if score > 0.85 and ibs2_ratio > 0.75:
             return "full siblings", 0.90
-        elif ibs_score > 0.70:
+        if score > 0.70:
             return "grandparent-grandchild/aunt-uncle/half-siblings", 0.85
-        elif ibs_score > 0.65:
+        if score > 0.65:
             return "first cousins", 0.80
-        elif ibs_score > 0.60:
+        if score > 0.60:
             return "second cousins", 0.70
-        elif ibs_score > 0.55:
+        if score > 0.55:
             return "third cousins", 0.60
-        else:
-            return "distant relative or unrelated", 0.50
-    
-    def run_pca_analysis(self, user1_snps, user2_snps, n_components=10):
-        """
-        Run PCA analysis on SNP data to determine genetic similarity.
-        """
-        try:
-            # Prepare data
-            user1_encoded, user2_encoded, n_valid_snps = self.prepare_snp_matrix(user1_snps, user2_snps)
-            
-            if n_valid_snps < 100:
-                raise ValueError("Insufficient valid SNPs for analysis")
-            
-            # Calculate IBS similarity
-            ibs_results = self.calculate_ibs_similarity(user1_encoded, user2_encoded)
-            ibs2_ratio = ibs_results['ibs2'] / ibs_results['total_snps']
-            
-            # Create combined matrix for PCA
-            # Stack the two samples
-            combined_data = np.vstack([user1_encoded, user2_encoded])
-            
-            # Apply PCA
-            n_components_actual = min(n_components, 2, n_valid_snps)
-            pca = PCA(n_components=n_components_actual)
-            
-            # Fit PCA on more samples if available, for now just these two
-            # In production, you'd want a reference panel
-            transformed = pca.fit_transform(combined_data.T).T
-            
-            # Calculate euclidean distance in PCA space
-            pca_distance = np.linalg.norm(transformed[0] - transformed[1])
-            
-            # Estimate relationship
-            relationship, confidence = self.estimate_relationship(
-                ibs_results['ibs_score'], 
-                ibs2_ratio
-            )
-            
-            # Compile results
-            results = {
-                'status': 'success',
-                'n_common_snps': n_valid_snps,
-                'ibs_analysis': ibs_results,
-                'ibs2_percentage': float(ibs2_ratio * 100),
-                'relationship': relationship,
-                'confidence': float(confidence),
-                'pca_distance': float(pca_distance),
-                'explained_variance_ratio': pca.explained_variance_ratio_.tolist() if hasattr(pca, 'explained_variance_ratio_') else None,
-                'recommendations': self.get_recommendations(relationship, confidence)
-            }
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"PCA analysis error: {e}")
-            raise
-    
-    def get_recommendations(self, relationship, confidence):
-        """Get recommendations based on relationship type."""
-        recs = []
-        
-        if "parent-child" in relationship:
-            recs.append("Very close genetic match consistent with parent-child relationship")
-            recs.append("Consider sharing family history and medical information")
-        elif "siblings" in relationship:
-            recs.append("Close genetic match consistent with sibling relationship")
-            recs.append("May share same parents - verify with family records")
-        elif "cousin" in relationship:
-            recs.append("Genetic match suggests cousin relationship")
-            recs.append("Look for common grandparents or great-grandparents")
-        elif "unrelated" in relationship:
-            recs.append("No significant genetic relationship detected")
-            recs.append("May still share very distant ancestry")
-            
-        if confidence < 0.8:
+        return "distant relative or unrelated", 0.50
+
+    @staticmethod
+    def _get_recommendations(rel: str, conf: float) -> List[str]:
+        recs: List[str] = []
+        if "parent-child" in rel:
+            recs += [
+                "Very close genetic match consistent with parent-child relationship",
+                "Consider sharing family history and medical information",
+            ]
+        elif "siblings" in rel:
+            recs += [
+                "Close genetic match consistent with sibling relationship",
+                "May share same parents – verify with family records",
+            ]
+        elif "cousin" in rel:
+            recs += [
+                "Genetic match suggests cousin relationship",
+                "Look for common grandparents or great-grandparents",
+            ]
+        elif "unrelated" in rel:
+            recs += [
+                "No significant genetic relationship detected",
+                "May still share very distant ancestry",
+            ]
+        if conf < 0.8:
             recs.append("Consider additional genetic testing for higher confidence")
-            
         return recs

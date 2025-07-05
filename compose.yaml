@@ -1,30 +1,13 @@
 services:
-  ollama:
-    image: "docker.io/ollama/ollama"
+  # Genetic Analysis Service - processes SNP data from WorldtreeTest contract
+  genetic-analysis:
+    # Using our custom worldtree genetic analysis image
+    image: docker.io/cyama/worldtree-genetic-analysis:latest@sha256:c370986f894e59d462cd2e8efb07ede1280309325a833012c710b451eda30682
     platform: linux/amd64
-    ports:
-      - "11434:11434"
-    volumes:
-      - /storage/ollama:/root/.ollama
-    entrypoint: ["/usr/bin/bash", "-c", "/bin/ollama serve & sleep 5; ollama pull deepseek-r1:1.5b; wait"]
-    healthcheck:
-      test: ["CMD", "/bin/ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  llm-api:
-    image: docker.io/cyama/llm-api:worldtree-test@sha256:de4d39b1fca53a8ffb7b71b3d76688d6a8e0de39862ddbcfe209d6731d9c9964
-    platform: linux/amd64
-    ports:
-      - "8080:8080"
+    environment:
+      # WorldtreeTest contract address with correct ROFL app ID
+      - CONTRACT_ADDRESS=0x614b1b0Dc3C94dc79f4df6e180baF8eD5C81BEc3
+      # Keep ticker for demo oracle compatibility
+      - TICKER=ROSEUSDT
     volumes:
       - /run/rofl-appd.sock:/run/rofl-appd.sock
-    depends_on:
-      ollama:
-        condition: service_healthy
-    restart: on-failure
-    environment:
-      - OLLAMA_URL=http://ollama:11434
-      - WORLDTREE_CONTRACT=0xa4e5c09C101A62Aa04A1078228527CD106012d0b
-      # - LLM_BRIDGE_CONTRACT=0x32f22B267Be8CD47FAF93Bcd1CC31059bdc24FD2
