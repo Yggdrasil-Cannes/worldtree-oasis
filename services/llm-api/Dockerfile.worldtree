@@ -13,7 +13,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Copy application code
-COPY main_worldtree_test.py .
+COPY main.py .
 COPY snp_analyzer.py .
 COPY abi_encoder.py .
 
@@ -22,4 +22,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
 # Run the genetic analysis service
-CMD ["python", "main_worldtree_test.py"] 
+CMD ["python", "main.py"] 

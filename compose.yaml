@@ -2,7 +2,7 @@ services:
   # Genetic Analysis Service - processes SNP data from WorldtreeTest contract
   genetic-analysis:
     # Using our custom worldtree genetic analysis image
-    image: docker.io/cyama/worldtree-genetic-analysis:latest@sha256:83206873f8b63165a3d957c35b106eb02b6009b36ed78370245fa5fed37a8ac5
+    image: docker.io/cyama/worldtree-genetic-analysis:latest@sha256:e161650a016e8e7b33e8e810e0add60a3a360cfb72608ecbfa87ff194701b7b0
     platform: linux/amd64
     environment:
       # WorldtreeTest contract address with correct ROFL app ID

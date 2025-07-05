@@ -100,7 +100,70 @@ class GeneticAnalysisService:
         except Exception as e:
             logger.error(f"Error getting app ID: {e}")
             return None
-
+    
+    async def get_pending_requests(self) -> List[int]:
+        """Get list of pending analysis requests from contract using Web3"""
+        try:
+            # Call the contract view function using Web3
+            pending_ids = self.contract.functions.getPendingRequests().call()
+            logger.info(f"Found {len(pending_ids)} pending requests from contract")
+            return list(pending_ids)
+        except Exception as e:
+            logger.error(f"Error getting pending requests: {e}")
+            # Fallback: check sequential IDs if the function doesn't exist
+            pending = []
+            for request_id in range(0, 10):  # Check first 10 IDs
+                try:
+                    request = self.contract.functions.requests(request_id).call()
+                    # Status index 3 is the status field, 0 = pending
+                    if request[3] == 0:  # Pending status
+                        pending.append(request_id)
+                        logger.info(f"Found pending request: {request_id}")
+                except:
+                    break  # No more requests
+            return pending
+    
+    async def get_snp_data_for_analysis(self, request_id: int) -> Tuple[Optional[str], Optional[str]]:
+        """Get SNP data for a request using Web3"""
+        try:
+            # This function can only be called by the ROFL app in the actual contract
+            # For now, we'll use mock data for testing
+            logger.info(f"Using mock SNP data for request {request_id}")
+            
+            # Generate realistic mock SNP data
+            mock_snp_1 = """rs123456:AA
+rs789012:GG
+rs345678:AT
+rs901234:CC
+rs567890:GT
+rs234567:AC
+rs890123:TT
+rs456789:GG
+rs012345:CA
+rs678901:AG"""
+            
+            mock_snp_2 = """rs123456:AG
+rs789012:GG
+rs345678:TT
+rs901234:CT
+rs567890:GG
+rs234567:CC
+rs890123:AT
+rs456789:GA
+rs012345:CC
+rs678901:GG"""
+            
+            # Add more SNPs to meet the 100 minimum requirement
+            for i in range(10, 110):
+                mock_snp_1 += f"\nrs{1000000+i}:{'AA' if i%3==0 else 'GG' if i%3==1 else 'AT'}"
+                mock_snp_2 += f"\nrs{1000000+i}:{'AG' if i%3==0 else 'GC' if i%3==1 else 'TT'}"
+            
+            return (mock_snp_1, mock_snp_2)
+            
+        except Exception as e:
+            logger.error(f"Error getting SNP data for request {request_id}: {e}")
+            return None, None
+    
     async def submit_transaction(self, function_name: str, args: list) -> Optional[dict]:
         """Submit an authenticated transaction to the contract via ROFL API"""
         try:
@@ -152,72 +215,6 @@ class GeneticAnalysisService:
             logger.error(traceback.format_exc())
             return None
     
-    async def get_pending_requests(self) -> List[int]:
-        """Get list of pending analysis requests from contract using Web3"""
-        try:
-            # Call the contract view function using Web3
-            pending_ids = self.contract.functions.getPendingRequests().call()
-            logger.info(f"Found {len(pending_ids)} pending requests from contract")
-            return list(pending_ids)
-        except Exception as e:
-            logger.error(f"Error getting pending requests: {e}")
-            # Fallback: check sequential IDs if the function doesn't exist
-            pending = []
-            for request_id in range(0, 10):  # Check first 10 IDs
-                try:
-                    request = self.contract.functions.requests(request_id).call()
-                    # Status index 3 is the status field, 0 = pending
-                    if request[3] == 0:  # Pending status
-                        pending.append(request_id)
-                        logger.info(f"Found pending request: {request_id}")
-                except:
-                    break  # No more requests
-            return pending
-    
-    async def get_snp_data_for_analysis(self, request_id: int) -> Tuple[Optional[str], Optional[str]]:
-        """Get SNP data for a request using Web3"""
-        try:
-            # This function can only be called by the ROFL app in the actual contract
-            # For now, we'll use mock data for testing
-            logger.info(f"Using mock SNP data for request {request_id}")
-            
-            # Generate realistic mock SNP data in 23andMe format
-            # Format: rsid position chromosome genotype
-            mock_snp_1 = """rs123456 1234567 1 AA
-rs789012 7890123 1 GG
-rs345678 3456789 2 AT
-rs901234 9012345 2 CC
-rs567890 5678901 3 GT
-rs234567 2345678 3 AC
-rs890123 8901234 4 TT
-rs456789 4567890 4 GG
-rs012345 123456 5 CA
-rs678901 6789012 5 AG"""
-            
-            mock_snp_2 = """rs123456 1234567 1 AG
-rs789012 7890123 1 GG
-rs345678 3456789 2 TT
-rs901234 9012345 2 CT
-rs567890 5678901 3 GG
-rs234567 2345678 3 CC
-rs890123 8901234 4 AT
-rs456789 4567890 4 GA
-rs012345 123456 5 CC
-rs678901 6789012 5 GG"""
-            
-            # Add more SNPs to meet the 100 minimum requirement
-            for i in range(10, 110):
-                chr_num = (i % 22) + 1  # Chromosomes 1-22
-                position = 1000000 + i * 10000
-                mock_snp_1 += f"\nrs{1000000+i} {position} {chr_num} {'AA' if i%3==0 else 'GG' if i%3==1 else 'AT'}"
-                mock_snp_2 += f"\nrs{1000000+i} {position} {chr_num} {'AG' if i%3==0 else 'GC' if i%3==1 else 'TT'}"
-            
-            return (mock_snp_1, mock_snp_2)
-            
-        except Exception as e:
-            logger.error(f"Error getting SNP data for request {request_id}: {e}")
-            return None, None
-    
     async def process_analysis_request(self, request_id: int) -> Optional[Dict[str, Any]]:
         """Process a single analysis request"""
         logger.info(f"Processing analysis request {request_id}")
@@ -262,8 +259,8 @@ rs678901 6789012 5 GG"""
             result_for_contract = {
                 "relationship": relationship,
                 "confidence": confidence,
-                "similarity": int(analysis_result["ibs_analysis"]["ibs_score"] * 100),  # IBS score as percentage
-                "shared_markers": analysis_result["n_common_snps"]  # Number of common SNPs
+                "similarity": analysis_result["similarity_score"],
+                "shared_markers": analysis_result["shared_markers"]
             }
             result_json = json.dumps(result_for_contract)
             
