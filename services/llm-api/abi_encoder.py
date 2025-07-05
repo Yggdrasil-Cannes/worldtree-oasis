@@ -40,7 +40,8 @@ def encode_function_call(function_name, args):
     func_def = WORLDTREE_TEST_ABI[function_name]
     
     # Get function selector (first 4 bytes of keccak256 hash)
-    selector = function_signature_to_4byte_selector(func_def["signature"]).hex()
+    selector_bytes = function_signature_to_4byte_selector(func_def["signature"])
+    selector = selector_bytes.hex()
     
     # Encode arguments
     if args:
