@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genetic Analysis Service</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+        .error {
+            background-color: #ffcccc;
+            color: #cc0000;
+        }
+        .success {
+            background-color: #ccffcc;
+            color: #006600;
+        }
+        .result {
+            background-color: #e6f7ff;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Genetic Analysis Service</h1>
+    
+    <button id="connectWallet" onclick="connectWallet()">Connect Wallet</button>
+    
+    <div id="analysisForm">
+        <h3>Request Analysis</h3>
+        <input type="text" id="user1Address" placeholder="User 1 Address (0x...)" />
+        <input type="text" id="user2Address" placeholder="User 2 Address (0x...)" />
+        <button id="submitBtn" onclick="submitAnalysis()">Submit Analysis Request</button>
+    </div>
+    
+    <div id="status" class="status hidden"></div>
+    <div id="error" class="status error hidden"></div>
+    
+    <div id="result" class="result hidden">
+        <h3>Analysis Results</h3>
+        <p><strong>Relationship:</strong> <span id="relationship"></span></p>
+        <p><strong>Confidence:</strong> <span id="confidence"></span>%</p>
+        <p><strong>Similarity Score:</strong> <span id="similarity"></span>%</p>
+        <p><strong>Shared Markers:</strong> <span id="sharedMarkers"></span></p>
+    </div>
+    
+    <div id="requestId" style="margin-top: 20px; font-size: 12px; color: #666;"></div>
+
+    <script>
+        const CONTRACT_ADDRESS = "0x614b1b0Dc3C94dc79f4df6e180baF8eD5C81BEc3";
+        const CONTRACT_ABI = [
+            {
+                "inputs": [
+                    {"internalType": "address", "name": "user1", "type": "address"},
+                    {"internalType": "address", "name": "user2", "type": "address"}
+                ],
+                "name": "requestAnalysis",
+                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [{"internalType": "uint256", "name": "requestId", "type": "uint256"}],
+                "name": "getAnalysisRequest",
+                "outputs": [
+                    {"internalType": "address", "name": "requester", "type": "address"},
+                    {"internalType": "address", "name": "user1", "type": "address"},
+                    {"internalType": "address", "name": "user2", "type": "address"},
+                    {"internalType": "string", "name": "status", "type": "string"},
+                    {"internalType": "string", "name": "result", "type": "string"},
+                    {"internalType": "uint256", "name": "requestTime", "type": "uint256"},
+                    {"internalType": "uint256", "name": "completionTime", "type": "uint256"}
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {"indexed": true, "internalType": "uint256", "name": "id", "type": "uint256"},
+                    {"indexed": false, "internalType": "address", "name": "requester", "type": "address"},
+                    {"indexed": false, "internalType": "address", "name": "user1", "type": "address"},
+                    {"indexed": false, "internalType": "address", "name": "user2", "type": "address"}
+                ],
+                "name": "AnalysisRequested",
+                "type": "event"
+            }
+        ];
+
+        let provider, signer, contract;
+
+        function showStatus(message, isError = false) {
+            const statusEl = document.getElementById('status');
+            const errorEl = document.getElementById('error');
+            
+            if (isError) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+                statusEl.classList.add('hidden');
+            } else {
+                statusEl.textContent = message;
+                statusEl.classList.remove('hidden');
+                errorEl.classList.add('hidden');
+            }
+        }
+
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum === 'undefined') {
+                    showStatus('Please install MetaMask!', true);
+                    return;
+                }
+
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+                
+                const address = await signer.getAddress();
+                showStatus(`Connected: ${address.substring(0, 6)}...${address.substring(38)}`);
+                
+                document.getElementById('connectWallet').textContent = 'Connected';
+                document.getElementById('connectWallet').disabled = true;
+            } catch (error) {
+                showStatus('Failed to connect wallet: ' + error.message, true);
+            }
+        }
+
+        async function submitAnalysis() {
+            try {
+                if (!signer) {
+                    showStatus('Please connect your wallet first', true);
+                    return;
+                }
+
+                const user1 = document.getElementById('user1Address').value;
+                const user2 = document.getElementById('user2Address').value;
+
+                if (!user1 || !user2) {
+                    showStatus('Please enter both user addresses', true);
+                    return;
+                }
+
+                document.getElementById('submitBtn').disabled = true;
+                showStatus('Submitting analysis request...');
+
+                // Submit the transaction
+                const tx = await contract.requestAnalysis(user1, user2);
+                showStatus('Transaction submitted, waiting for confirmation...');
+                
+                const receipt = await tx.wait();
+                
+                // Find the AnalysisRequested event to get the request ID
+                let requestId = null;
+                for (const log of receipt.logs) {
+                    try {
+                        const parsed = contract.interface.parseLog(log);
+                        if (parsed.name === 'AnalysisRequested') {
+                            requestId = parsed.args.id.toString();
+                            break;
+                        }
+                    } catch (e) {
+                        // Not our event, continue
+                    }
+                }
+
+                if (requestId) {
+                    document.getElementById('requestId').textContent = `Request ID: ${requestId}`;
+                    showStatus(`Analysis request created with ID: ${requestId}`);
+                    
+                    // Start polling for results
+                    pollForResults(requestId);
+                } else {
+                    showStatus('Request submitted but could not find ID', true);
+                }
+
+            } catch (error) {
+                showStatus('Error: ' + error.message, true);
+                document.getElementById('submitBtn').disabled = false;
+            }
+        }
+
+        async function pollForResults(requestId) {
+            showStatus('Waiting for ROFL analysis to complete...');
+            
+            const checkStatus = async () => {
+                try {
+                    const request = await contract.getAnalysisRequest(requestId);
+                    
+                    if (request.status === 'completed') {
+                        showStatus('Analysis completed!', false);
+                        
+                        // Parse and display results
+                        const result = JSON.parse(request.result);
+                        document.getElementById('relationship').textContent = result.relationship;
+                        document.getElementById('confidence').textContent = result.confidence;
+                        document.getElementById('similarity').textContent = result.similarity;
+                        document.getElementById('sharedMarkers').textContent = result.shared_markers;
+                        document.getElementById('result').classList.remove('hidden');
+                        
+                        document.getElementById('submitBtn').disabled = false;
+                        return true; // Stop polling
+                        
+                    } else if (request.status === 'failed') {
+                        showStatus('Analysis failed: ' + request.result, true);
+                        document.getElementById('submitBtn').disabled = false;
+                        return true; // Stop polling
+                        
+                    } else {
+                        showStatus(`Analysis status: ${request.status}. Checking again in 5 seconds...`);
+                        return false; // Continue polling
+                    }
+                } catch (error) {
+                    console.error('Error checking status:', error);
+                    return false; // Continue polling
+                }
+            };
+
+            // Initial check
+            const completed = await checkStatus();
+            if (!completed) {
+                // Set up polling interval
+                const interval = setInterval(async () => {
+                    const done = await checkStatus();
+                    if (done) {
+                        clearInterval(interval);
+                    }
+                }, 5000); // Poll every 5 seconds
+            }
+        }
+
+        // Auto-connect if already authorized
+        window.addEventListener('load', async () => {
+            if (window.ethereum) {
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                if (accounts.length > 0) {
+                    connectWallet();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
