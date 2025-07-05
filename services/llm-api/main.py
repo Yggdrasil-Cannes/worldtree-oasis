@@ -109,20 +109,21 @@ class GeneticAnalysisService:
                 # Encode the function call
                 encoded_data = encode_function_call(function_name, args)
                 
-                # Remove '0x' prefix from contract address and ensure lowercase
+                # Use lowercase address with '0x' prefix (as shown in docs)
                 to_address = self.contract_address.lower()
-                if to_address.startswith('0x'):
-                    to_address = to_address[2:]
+                if not to_address.startswith('0x'):
+                    to_address = '0x' + to_address
                 
                 # Format transaction according to ROFL API specification
+                # FIXED: Use numbers for gas_limit and value, keep '0x' prefix on 'to' address
                 tx_data = {
                     "tx": {
                         "kind": "eth",
                         "data": {
-                            "gas_limit": 1000000,  # Increased gas limit
-                            "to": to_address,      # Address without '0x' prefix
-                            "value": 0,
-                            "data": encoded_data   # Keep '0x' prefix on data
+                            "gas_limit": 1000000,    # NUMBER, not string
+                            "to": to_address,        # Address WITH '0x' prefix
+                            "value": 0,              # NUMBER, not string
+                            "data": encoded_data     # Keep '0x' prefix on data
                         }
                     },
                     "encrypt": True  # Enable encryption
