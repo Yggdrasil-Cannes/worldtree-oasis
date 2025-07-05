@@ -8,8 +8,9 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the bridge-aware version
-COPY main_with_bridge.py main.py
+# Copy all necessary files
+COPY main_worldtree.py main.py
+COPY snp_analyzer.py snp_analyzer.py
 
 EXPOSE 8080
 

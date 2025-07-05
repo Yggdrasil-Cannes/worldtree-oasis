@@ -14,7 +14,7 @@ services:
       retries: 5
 
   llm-api:
-    image: docker.io/cyama/llm-api:latest@sha256:f7ef7522e3b517e2a2709d8315b8eb88a84dafd3baeeb0ed1a5b475dc085c361
+    image: docker.io/cyama/llm-api:latest@sha256:71bea9f279202cdaef4a6e47e6c13ac52b7b9d5814003cd258bbc28146fe06e5
     platform: linux/amd64
     ports:
       - "8080:8080"
