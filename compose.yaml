@@ -14,7 +14,7 @@ services:
       retries: 5
 
   llm-api:
-    image: docker.io/cyama/llm-api:latest@sha256:71bea9f279202cdaef4a6e47e6c13ac52b7b9d5814003cd258bbc28146fe06e5
+    image: docker.io/cyama/llm-api:worldtree-test@sha256:de4d39b1fca53a8ffb7b71b3d76688d6a8e0de39862ddbcfe209d6731d9c9964
     platform: linux/amd64
     ports:
       - "8080:8080"
@@ -26,4 +26,5 @@ services:
     restart: on-failure
     environment:
       - OLLAMA_URL=http://ollama:11434
-      - LLM_BRIDGE_CONTRACT=0x32f22B267Be8CD47FAF93Bcd1CC31059bdc24FD2
+      - WORLDTREE_CONTRACT=0xa4e5c09C101A62Aa04A1078228527CD106012d0b
+      # - LLM_BRIDGE_CONTRACT=0x32f22B267Be8CD47FAF93Bcd1CC31059bdc24FD2

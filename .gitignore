@@ -74,6 +74,8 @@ build/
 dist/
 target/
 
+CLAUDE.md
+
 # Walrus storage
 .walrus/
 
@@ -94,3 +96,4 @@ typechain/
 typechain-types/
 
 #
+.git-backup-20250705-025554/
