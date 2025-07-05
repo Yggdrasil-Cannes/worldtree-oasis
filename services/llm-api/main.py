@@ -109,24 +109,28 @@ class GeneticAnalysisService:
                 # Encode the function call
                 encoded_data = encode_function_call(function_name, args)
                 
-                # Use lowercase address with '0x' prefix (as shown in docs)
+                # IMPORTANT: Strip '0x' prefix from address and data (despite what docs say)
+                # The demo project shows this is required for ROFL API
                 to_address = self.contract_address.lower()
-                if not to_address.startswith('0x'):
-                    to_address = '0x' + to_address
+                if to_address.startswith('0x'):
+                    to_address = to_address[2:]  # Remove '0x' prefix
                 
-                # Format transaction according to ROFL API specification
-                # FIXED: Use numbers for gas_limit and value, keep '0x' prefix on 'to' address
+                # Strip '0x' from encoded data as well
+                if encoded_data.startswith('0x'):
+                    encoded_data = encoded_data[2:]
+                
+                # Format transaction according to ACTUAL ROFL API requirements (not docs)
                 tx_data = {
                     "tx": {
                         "kind": "eth",
                         "data": {
                             "gas_limit": 1000000,    # NUMBER, not string
-                            "to": to_address,        # Address WITH '0x' prefix
+                            "to": to_address,        # Address WITHOUT '0x' prefix
                             "value": 0,              # NUMBER, not string
-                            "data": encoded_data     # Keep '0x' prefix on data
+                            "data": encoded_data     # Data WITHOUT '0x' prefix
                         }
                     },
-                    "encrypt": True  # Enable encryption
+                    "encrypt": False  # Disable encryption like the demo
                 }
                 
                 logger.info(f"Submitting transaction {function_name} with args: {args}")
@@ -416,7 +420,7 @@ def create_app():
 async def main():
     """Main entry point"""
     logger.info("=" * 60)
-    logger.info("Starting ROFL Genetic Analysis Service (Fixed V3)")
+    logger.info("Starting ROFL Genetic Analysis Service (Fixed V4 - No 0x prefix)")
     logger.info(f"Contract: {CONTRACT_ADDRESS}")
     logger.info(f"RPC URL: {RPC_URL}")
     logger.info(f"ROFL Socket: {ROFL_SOCKET}")
