@@ -29,7 +29,7 @@ Privacy-preserving genetic analysis on Oasis Sapphire using Runtime Off-chain Lo
 - `main.py` - Polls blockchain for pending analyses, performs PCA-based genetic similarity
 - `snp_analyzer.py` - SNP data processing and similarity calculations
 - `abi_encoder.py` - Ethereum ABI encoding for ROFL transactions
-- Runs DeepSeek-R1:1.5b via Ollama for potential LLM features
+- Runs DeepSeek-R1:1.5b via Ollama so that users can query their sensitive genetic data and ask things about it in a safe and secure way, this is additional feature, the main value of the ROFL TEE is verified and secure statistical computation.
 
 **Integration**
 - ROFL polls smart contract every 30 seconds for pending requests
