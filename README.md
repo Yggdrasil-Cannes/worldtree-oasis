@@ -5,8 +5,17 @@ Privacy-preserving genetic analysis on Oasis Sapphire using Runtime Off-chain Lo
 ## Architecture
 
 ```
-User → WorldtreeBackend.sol → ROFL TEE → Blockchain
-        (hash storage)      (analysis)   (results)
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   User Client   │───▶│  Smart Contract  │───▶│   ROFL App      │
+│                 │    │  (Sapphire)      │    │   (TEE)         │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+        │                        │                        │
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│ Register w/ SNP │    │ Store Encrypted  │    │ Process Analysis│
+│ Submit Requests │    │ Data & Requests  │    │ Submit Results  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
 ### Core Components
@@ -30,12 +39,31 @@ User → WorldtreeBackend.sol → ROFL TEE → Blockchain
 
 ### Data Flow
 
-1. Users register SNP data hash on-chain (raw data stays local)
-2. User A requests analysis with User B
-3. User B grants consent
-4. ROFL detects consented request
-5. ROFL retrieves and analyzes data in TEE
-6. Results (similarity score) posted on-chain
+1. **Registration**: Users upload SNP data hash to `WorldtreeBackend.sol`
+   - Raw genetic data never leaves user's device
+   - Only SHA-256 hash stored on-chain
+   - User gets derived address for privacy
+
+2. **Analysis Request**: User A calls `requestAnalysisFor(userA, userB)`
+   - Creates pending request on-chain
+   - Emits `AnalysisRequested` event
+   - Request ID generated for tracking
+
+3. **Consent**: User B calls `grantConsentFor(userB, requestId, method, key)`
+   - Marks request as consented
+   - Provides decryption key if using encrypted storage
+   - Triggers ROFL processing
+
+4. **ROFL Processing**: TEE polls for consented requests every 30s
+   - Retrieves encrypted SNP data for both users
+   - Decrypts data inside secure enclave
+   - Runs PCA-based genetic similarity analysis
+   - Calculates relationship probability
+
+5. **Result Submission**: ROFL calls `submitAnalysisResult(requestId, similarity)`
+   - Posts similarity score on-chain
+   - Emits `AnalysisComplete` event
+   - Raw genetic data remains private
 
 ## Setup
 
