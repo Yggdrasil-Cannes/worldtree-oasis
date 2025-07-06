@@ -137,7 +137,7 @@ contract WorldtreePrivate {
         
         // Store encrypted key grant
         dataGrants[msg.sender][requestId] = DataAccessGrant({
-            grantedTo: address(uint160(uint256(roflApp))),
+            grantedTo: address(uint160(bytes20(roflApp))),
             expiryTime: block.timestamp + 7 days,  // Expires in 7 days
             requestId: requestId,
             encryptedKey: encryptedKey

@@ -119,7 +119,7 @@ class GeneticAnalysisService:
                 if encoded_data.startswith('0x'):
                     encoded_data = encoded_data[2:]
                 
-                # Format transaction according to ACTUAL ROFL API requirements (not docs)
+                # Format transaction 
                 tx_data = {
                     "tx": {
                         "kind": "eth",

@@ -173,7 +173,7 @@ contract WorldtreeWalrus {
         if (method == DataSubmissionMethod.WalrusRetrieval) {
             dataGrants[msg.sender][requestId] = TemporaryDataGrant({
                 requestId: requestId,
-                grantedTo: address(uint160(uint256(roflApp))),
+                grantedTo: address(uint160(bytes20(roflApp))),
                 expiryTime: block.timestamp + 24 hours,
                 encryptedWalrusKey: encryptedWalrusKey,
                 encryptedDataUrl: users[msg.sender].walrusBlob
